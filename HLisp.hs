@@ -21,15 +21,15 @@ data LispExpr =
   | LispFunc [String] LispExpr -- function: args, body
 
 instance Show LispExpr where
-  show (LispList l)         = "<" ++ (intercalate " " (map show l)) ++ ">"
-  show (LispQList l)         = "<" ++ (intercalate " " (map show l)) ++ ">"
+  show (LispList l)         = "[" ++ (intercalate " " (map show l)) ++ "]"
+  show (LispQList l)        = "~[" ++ (intercalate " " (map show l)) ++ "]"
   show (LispSym s)          = s
   show (LispBool b)         = show b
   show (LispNum n)          = show n
   show (LispStr s)          = "\"" ++ s ++ "\""
   show LispUnit             = "()"
   show (LispFunc args body) =
-    "<\\" ++ (intercalate " " args) ++ " -> " ++ show body ++ ">"
+    "[\\" ++ (intercalate " " args) ++ " -> " ++ show body ++ "]"
 
 -- parsing
 parseLispExpr = parseLispQList
@@ -40,11 +40,11 @@ parseLispExpr = parseLispQList
             <|> try parseLispSym
 
 parseLispQList = do
-  exprs <- between (string "`<") (char '>') (sepBy1 parseLispExpr spaces)
+  exprs <- between (string "~[") (char ']') (sepBy parseLispExpr spaces)
   return $ LispQList exprs
 
 parseLispList = do
-  exprs <- between (char '<') (char '>') (sepBy1 parseLispExpr spaces)
+  exprs <- between (char '[') (char ']') (sepBy parseLispExpr spaces)
   return $ LispList exprs
 
 parseLispBoolTrue = do
@@ -67,7 +67,7 @@ parseLispStr = do
   return $ LispStr str
 
 parseLispSym = do
-  sym <- many1 $ choice [letter, oneOf "/!@#$%^&*-+_"]
+  sym <- many1 $ choice [letter, oneOf "/!@#$%^&*-+_=<>|?"]
   return $ LispSym sym
 
 -- preprocess text input before parsing
@@ -83,14 +83,24 @@ type LispEnv  = M.Map String LispExpr
 
 -- primitive functions and number of parameters they take
 primitives = [
+  -- control / io primitives
   ("print",(1,printPrimitive)),
   ("set",(2,setPrimitive)),
   ("fun",(2,funPrimitive)),
   ("if",(3,ifPrimitive)),
+  -- arith + bool primitives
   ("+",(2,addPrimitive)),
   ("-",(2,subPrimitive)),
   ("*",(2,mulPrimitive)),
-  ("/",(2,divPrimitive))]
+  ("/",(2,divPrimitive)),
+  ("<",(2,ltPrimitive)),
+  (">",(2,gtPrimitive)),
+  ("==",(2,eqPrimitive)),
+  -- list primitives
+  ("head",(1,headPrimitive)),
+  ("tail",(1,tailPrimitive)),
+  ("nil?",(1,nilPrimitive)),
+  ("cons",(2,consPrimitive))]
   
 eval :: LispEnv -> LispExpr -> LispExec
 eval env expr
@@ -138,7 +148,7 @@ apply env fsym args
     let numArgs = length args
     if numParams == numArgs
     then primFunc env args
-    else throwError $ fsym ++ " expression expects " ++ show numParams ++ " arguments, got " ++ show numArgs
+    else throwError $ fsym ++ " expression expects " ++ show numParams ++ " argument(s), got " ++ show numArgs
   | otherwise = do
     case M.lookup fsym env of
       Just (LispFunc params body) -> applyFunc env fsym args params body
@@ -226,6 +236,47 @@ divPrimitive env (x:y:_) = do
     (LispNum xint, LispNum yint)  -> return $ LispNum (div xint yint)
     _                             -> throwError "* takes two integers" 
 
+arithBoolPrimitive :: (Int -> Int-> Bool) -> String -> LispEnv -> [LispExpr] -> LispExec
+arithBoolPrimitive f fsym env (x:y:_) = do
+  [xval, yval] <- mapM (eval env) [x, y]
+  case (xval,yval) of
+    (LispNum xint, LispNum yint) -> return $ LispBool (f xint yint)
+    _                         -> throwError $ fsym ++ " takes two integers"
+
+ltPrimitive = arithBoolPrimitive (<) "<"
+gtPrimitive = arithBoolPrimitive (>) ">"
+eqPrimitive = arithBoolPrimitive (==) "=="
+
+headPrimitive :: LispEnv -> [LispExpr] -> LispExec
+headPrimitive env (lst:_) = do
+  lstval <- eval env lst
+  case lstval of
+    LispQList (x:_)   -> eval env x
+    LispQList []      -> throwError "head expects non-empty list"
+    otherwise         -> throwError "head expects list argument"
+
+tailPrimitive :: LispEnv -> [LispExpr] -> LispExec
+tailPrimitive env (lst:_) = do
+  lstval <- eval env lst
+  case lstval of
+    LispQList (_:xs)  -> eval env $ LispQList xs
+    otherwise         -> throwError "tail expects list argument"
+
+nilPrimitive :: LispEnv -> [LispExpr] -> LispExec
+nilPrimitive env (lst:_) = do
+  lstval <- eval env lst
+  case lstval of
+    LispQList (_:_)   -> return $ LispBool False
+    LispQList []      -> return $ LispBool True
+    otherwise         -> throwError "nil? expects list argument"
+
+consPrimitive :: LispEnv -> [LispExpr] -> LispExec
+consPrimitive env (hd:tl:_) = do
+  hdval <- eval env hd
+  tlval <- eval env tl
+  case tlval of
+    LispQList xs      -> return $ LispQList (hdval:xs)
+    otherwise         -> throwError "cons expects 2nd argument to be a list"
 
 main = do
   putStrLn "HLisp v0.01"
