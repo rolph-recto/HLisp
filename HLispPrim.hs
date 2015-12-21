@@ -8,7 +8,7 @@ import qualified Data.Map.Strict as M
 import HLispExpr
 import HLispEval
 
--- primitive functions
+-- print something out
 printPrimitive :: LispEnv -> [LispExpr] -> LispExec
 printPrimitive env (arg:_) = do
   val <- eval env arg
@@ -17,6 +17,16 @@ printPrimitive env (arg:_) = do
     _         -> liftIO $ putStrLn $ show val
 
   return LispUnit
+
+-- get user input from stdin
+inputPrimitive :: LispEnv -> [LispExpr] -> LispExec
+inputPrimitive env args = do
+  case args of
+    [] -> do
+      line <- liftIO getLine
+      return $ LispStr line
+
+    otherwise -> throwError "input takes no arguments!"
   
 -- set a binding in the global environment
 setPrimitive :: LispEnv -> [LispExpr] -> LispExec
@@ -56,6 +66,22 @@ ifPrimitive env args = do
     LispBool False -> eval env (args !! 2)
     otherwise -> throwError "if predicate must be boolean"
 
+-- let expression
+-- this is basically a function application that can set the
+-- name of its parameter
+letPrimitive :: LispEnv -> [LispExpr] -> LispExec
+letPrimitive env args = do
+  let (body:letbinds) = reverse args 
+  binds <- forM (reverse letbinds) $ \letbind -> do
+    case letbind of
+      LispList [LispSym var, val] -> return (var,val)
+      otherwise -> do
+        throwError "let binds must have form [let [var val] ... [var val] body]"
+
+  let (vars, vals) = unzip binds
+  applyFunc env "let" vals vars body
+  
+-- arithmetic primitives
 addPrimitive :: LispEnv -> [LispExpr] -> LispExec
 addPrimitive env (x:y:_) = do
   [xval,yval] <- mapM (eval env) [x,y]
@@ -97,6 +123,7 @@ ltPrimitive = arithBoolPrimitive (<) "<"
 gtPrimitive = arithBoolPrimitive (>) ">"
 eqPrimitive = arithBoolPrimitive (==) "=="
 
+-- list primitives
 headPrimitive :: LispEnv -> [LispExpr] -> LispExec
 headPrimitive env (lst:_) = do
   lstval <- eval env lst
@@ -128,14 +155,27 @@ consPrimitive env (hd:tl:_) = do
     LispQList xs      -> return $ LispQList (hdval:xs)
     otherwise         -> throwError "cons expects 2nd argument to be a list"
 
+-- concatenate some strings together
+concatPrimitive :: LispEnv -> [LispExpr] -> LispExec
+concatPrimitive env args = do
+  evalArgs <- mapM (eval env) args
+  strs <- forM evalArgs $ \evalArg -> do
+    case evalArg of
+      LispStr s -> return s
+      otherwise -> throwError "concat takes strings as arguments"
+
+  return $ LispStr $ foldr (++) "" strs
+
 -- primitive functions and number of parameters they take
 primitives :: [(String, (Int,PrimFunc))]
 primitives = [
   -- control / io primitives
   ("print",(1,printPrimitive)),
+  ("input",(0,inputPrimitive)),
   ("set",(2,setPrimitive)),
   ("fun",(2,funPrimitive)),
   ("if",(3,ifPrimitive)),
+  ("let",(-1,letPrimitive)), -- let has a variable number of arguments
   -- arith + bool primitives
   ("+",(2,addPrimitive)),
   ("-",(2,subPrimitive)),
@@ -148,5 +188,7 @@ primitives = [
   ("head",(1,headPrimitive)),
   ("tail",(1,tailPrimitive)),
   ("nil?",(1,nilPrimitive)),
-  ("cons",(2,consPrimitive))]
+  ("cons",(2,consPrimitive)),
+  -- string primitives
+  ("concat",(-1,concatPrimitive))]
 

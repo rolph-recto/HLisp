@@ -1,4 +1,7 @@
-module HLispEval (eval) where
+module HLispEval (
+  eval,
+  apply, applyFunc, applyPrimFunc
+) where
 
 import Control.Monad.Except
 import Control.Monad.State
@@ -40,16 +43,32 @@ applyFunc env fsym args params body = do
   let numParams = length params
   if numArgs == numParams
   then do
+    -- add args to environment
     evalArgs <- mapM (eval env) args
     let env' = foldr (\(key,val) acc -> M.insert key val acc) env (zip params evalArgs)
     eval env' body
   else do
     throwError $ "function " ++ fsym ++ " expects " ++ show numParams ++ " arguments, got " ++ show numArgs
 
+
+applyPrimFunc :: LispEnv -> String -> [LispExpr] -> Int -> PrimFunc -> LispExec
+applyPrimFunc env fsym args n f = do
+  let numArgs = length args
+  if numArgs == n || n < 0
+  then do
+    -- don't evaluate arguments to primitive functions!
+    -- evalArgs <- mapM (eval env) args
+    f env args
+  else do
+    throwError $ "function " ++ fsym ++ " expects " ++ show n ++ " arguments, got " ++ show numArgs
+
+
 apply :: LispEnv -> String -> [LispExpr] -> LispExec
 apply env fsym args
   | Just (LispFunc params body) <- M.lookup fsym env = do
     applyFunc env fsym args params body
+  | Just (LispPrimFunc n f) <- M.lookup fsym env = do
+    applyPrimFunc env fsym args n f
   | otherwise = do
     globalEnv <- lift get
     case M.lookup fsym globalEnv of
@@ -59,13 +78,6 @@ apply env fsym args
 
       -- primitive function defined in Haskell
       Just (LispPrimFunc n f) -> do
-        let numArgs = length args
-        if numArgs  == n
-        then do
-          -- don't evaluate arguments to primitive functions!
-          -- evalArgs <- mapM (eval env) args
-          f env args
-        else do
-          throwError $ "function " ++ fsym ++ " expects " ++ show n ++ " arguments, got " ++ show numArgs
+        applyPrimFunc env fsym args n f
 
       otherwise -> throwError $ fsym ++ " is not a function"

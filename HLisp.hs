@@ -1,5 +1,8 @@
 module HLisp () where
 
+import System.IO
+import System.Directory (doesFileExist)
+
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State
@@ -21,23 +24,61 @@ main = do
 mainLoop state = do
   putStr ">> "
   line <- getLine
-  unless (line == "quit") $ do
-    case parseLisp line of
-      Left err -> do
-        liftIO $ putStrLn $ show err
-        mainLoop state
-    
-      Right expr -> do
-        (result, state') <- runStateT (runExceptT $ eval M.empty expr) state
-        case result of
-          Left err -> do
-            liftIO $ putStrLn err
-            mainLoop state'
+  case words line of
+    -- repl commands
+    ("quit":_) -> return ()
 
-          -- don't print anything for unit values
-          Right LispUnit -> do
-            mainLoop state'
+    ("globals":_) -> do
+      forM_ (M.toList state) $ \(var,val) -> do
+        liftIO $ putStrLn $ var ++ ": " ++ (show val)
+    
+      mainLoop state
+    
+    ("load":file:_) -> do
+      fileExists <- doesFileExist file
+      if fileExists
+      then do
+        withFile file ReadMode $ \h -> do
+          filestr <- hGetContents h
+          case parseLispFile filestr of
+            Left err -> do
+              liftIO $ putStrLn $ show err
+              mainLoop state
           
-          Right val -> do
-            liftIO $ putStrLn $ show val
-            mainLoop state'
+            Right exprs -> do
+              let exprList = LispList exprs
+              (result, state') <- runStateT (runExceptT $ eval M.empty exprList) state
+              case result of
+                Left err -> do
+                  liftIO $ putStrLn err
+                  mainLoop state'
+
+                Right _ -> do
+                  mainLoop state'
+
+        else do
+          liftIO $ putStrLn "File doesn't exist!"
+          mainLoop state
+
+
+    -- a lisp command
+    otherwise -> do
+      case parseLisp line of
+        Left err -> do
+          liftIO $ putStrLn $ show err
+          mainLoop state
+      
+        Right expr -> do
+          (result, state') <- runStateT (runExceptT $ eval M.empty expr) state
+          case result of
+            Left err -> do
+              liftIO $ putStrLn err
+              mainLoop state'
+
+            -- don't print anything for unit values
+            Right LispUnit -> do
+              mainLoop state'
+            
+            Right val -> do
+              liftIO $ putStrLn $ show val
+              mainLoop state'

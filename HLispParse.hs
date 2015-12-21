@@ -1,4 +1,4 @@
-module HLispParse (parseLisp) where
+module HLispParse (parseLisp, parseLispFile) where
 
 import Data.Char
 import Data.String.Utils
@@ -19,7 +19,7 @@ parseLispQList = do
   return $ LispQList exprs
 
 parseLispList = do
-  exprs <- between (char '[') (char ']') (sepBy parseLispExpr spaces)
+  exprs <- between (optional spaces >> char '[' >> optional spaces) (optional spaces >> char ']' >> optional spaces) (sepBy parseLispExpr spaces)
   return $ LispList exprs
 
 parseLispBoolTrue = do
@@ -53,3 +53,5 @@ preprocessInput input = foldr (\f acc -> f acc) input processors
 parseLisp :: String -> Either ParseError LispExpr
 parseLisp input = parse parseLispExpr "" (preprocessInput input)
 
+parseLispFile :: String -> Either ParseError [LispExpr]
+parseLispFile input = parse (sepBy parseLispExpr spaces) "" (preprocessInput input)
