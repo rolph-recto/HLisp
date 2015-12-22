@@ -1,5 +1,7 @@
 module HLispPrim (primitives) where
 
+import System.Random
+
 import Control.Monad.Except
 import Control.Monad.State
 
@@ -26,35 +28,23 @@ printPrimitive env args = do
 -- get user input from stdin
 inputPrimitive :: PrimFunc a
 inputPrimitive env args = do
-  case args of
-    [] -> do
-      line <- liftIO getLine
-      return $ LispStr line
-
-    otherwise -> throwError "input takes no arguments!"
+  line <- liftIO getLine
+  return $ LispStr line
 
 inputNumPrimitive :: PrimFunc a
 inputNumPrimitive env args = do
-  case args of
-    [] -> do
-      line <- liftIO getLine
-      case readMaybe line of
-        Just n -> return $ LispNum n
-        Nothing -> throwError "expected num input!"
-
-    otherwise -> throwError "input takes no arguments!"
+  line <- liftIO getLine
+  case readMaybe line of
+    Just n -> return $ LispNum n
+    Nothing -> throwError "expected num input!"
 
 inputBoolPrimitive :: PrimFunc a
 inputBoolPrimitive env args = do
-  case args of
-    [] -> do
-      line <- liftIO getLine
-      case map toLower line of
-        "true"  -> return $ LispBool True
-        "false" -> return $ LispBool False
-        _       -> throwError "expected bool input!"
-
-    otherwise -> throwError "input takes no arguments!"
+  line <- liftIO getLine
+  case map toLower line of
+    "true"  -> return $ LispBool True
+    "false" -> return $ LispBool False
+    _       -> throwError "input: expected bool"
   
   
 -- set a binding in the global environment
@@ -66,7 +56,8 @@ setPrimitive env args = do
       val <- eval env (args !! 1)
       lift $ put $ (userState, M.insert s val globalEnv)
       return LispUnit
-    otherwise -> throwError "first argument to set must be a symbol"
+
+    otherwise -> throwError "set: first argument must be a symbol"
 
 -- convert list to function
 funPrimitive :: PrimFunc a
@@ -75,9 +66,9 @@ funPrimitive env args = do
     [LispList params, body@(LispList _)] -> do
       if all isSym params
       then return $ LispFunc (map symStr params) body
-      else throwError "params must be symbols"
+      else throwError "fun: params must be symbols"
 
-    _ -> throwError "first and second args to fun must be lists"
+    _ -> throwError "fun: first and second arguments must be lists"
 
   where isSym (LispSym _)   = True
         isSym _             = False
@@ -93,7 +84,7 @@ ifPrimitive env args = do
   case predVal of 
     LispBool True -> eval env (args !! 1)
     LispBool False -> eval env (args !! 2)
-    otherwise -> throwError "if predicate must be boolean"
+    otherwise -> throwError "if: predicate must be boolean"
 
 whilePrimitive :: PrimFunc a
 whilePrimitive env (pred:body:_) = do
@@ -103,7 +94,7 @@ whilePrimitive env (pred:body:_) = do
       eval env body
       whilePrimitive env [pred,body]
     LispBool False  -> return LispUnit
-    otherwise       -> throwError "while guard must be a boolean"
+    otherwise       -> throwError "while: guard must be a boolean"
 
 forPrimitive :: PrimFunc a
 forPrimitive env (var:lst:body:_) = do
@@ -117,7 +108,7 @@ forPrimitive env (var:lst:body:_) = do
 
       return LispUnit
 
-    otherwise -> throwError "for expects a symbol and a quoted list"
+    otherwise -> throwError "for: arguments must be symbol and quoted list"
 
 repeatPrimitive :: PrimFunc a
 repeatPrimitive env (n':body:_) = do
@@ -127,7 +118,7 @@ repeatPrimitive env (n':body:_) = do
       forM_ [1..n] $ \_ -> (eval env body)
       return LispUnit
 
-    otherwise -> throwError "first argument of repeat must be a num"
+    otherwise -> throwError "repeat: first argument must be a num"
   
   
 -- let expression
@@ -140,10 +131,28 @@ letPrimitive env args = do
     case letbind of
       LispList [LispSym var, val] -> return (var,val)
       otherwise -> do
-        throwError "let binds must have form [let [var val] ... [var val] body]"
+        throwError "let: binds must have form [let [var val] ... [var val] body]"
 
   let (vars, vals) = unzip binds
   applyFunc env "let" vals vars body
+
+-- random number generator
+-- returns an int between lo and hi
+randomPrimitive :: PrimFunc a
+randomPrimitive env (lo':hi':_) = do
+  loVal <- eval env lo'
+  hiVal <- eval env hi'
+  case (loVal,hiVal) of
+    (LispNum lo, LispNum hi) -> do
+      if lo >= hi
+      then do
+        throwError "random: first argument must be less than second argument"
+
+      else do
+        val <- liftIO $ getStdRandom (randomR (lo,hi))
+        return $ LispNum val
+
+    _ -> throwError "random: expected numbers as arguments"
   
 -- arithmetic primitives
 addPrimitive :: PrimFunc a
@@ -202,15 +211,15 @@ headPrimitive env (lst:_) = do
   lstval <- eval env lst
   case lstval of
     LispQList (x:_)   -> eval env x
-    LispQList []      -> throwError "head expects non-empty list"
-    otherwise         -> throwError "head expects list argument"
+    LispQList []      -> throwError "head: expected non-empty list"
+    otherwise         -> throwError "head: expected list argument"
 
 tailPrimitive :: PrimFunc a
 tailPrimitive env (lst:_) = do
   lstval <- eval env lst
   case lstval of
     LispQList (_:xs)  -> eval env $ LispQList xs
-    otherwise         -> throwError "tail expects list argument"
+    otherwise         -> throwError "tail: expected list argument"
 
 nilPrimitive :: PrimFunc a
 nilPrimitive env (lst:_) = do
@@ -218,7 +227,7 @@ nilPrimitive env (lst:_) = do
   case lstval of
     LispQList l       -> return $ LispBool $ length l == 0
     LispStr s         -> return $ LispBool $ length s == 0
-    otherwise         -> throwError "nil? expects list argument"
+    otherwise         -> throwError "nil?: expected list argument"
 
 consPrimitive :: PrimFunc a
 consPrimitive env (hd:tl:_) = do
@@ -226,7 +235,7 @@ consPrimitive env (hd:tl:_) = do
   tlval <- eval env tl
   case tlval of
     LispQList xs      -> return $ LispQList (hdval:xs)
-    otherwise         -> throwError "cons expects 2nd argument to be a list"
+    otherwise         -> throwError "cons: expected second argument to be a list"
 
 -- access an element of a list/string
 indexPrimitive :: PrimFunc a
@@ -241,7 +250,7 @@ indexPrimitive env (index:lst:_) = do
       if n < length str
       then return $ LispStr [(str !! n)]
       else throwError "list index out of bounds"
-    otherwise -> throwError "! expects a list/string and a num as arguments"
+    otherwise -> throwError "!: expected list/string and num as arguments"
 
 -- concatenate some strings together
 concatPrimitive :: PrimFunc a
@@ -250,7 +259,7 @@ concatPrimitive env args = do
   strs <- forM evalArgs $ \evalArg -> do
     case evalArg of
       LispStr s -> return s
-      otherwise -> throwError "concat takes strings as arguments"
+      otherwise -> throwError "concat: expected strings as arguments"
 
   return $ LispStr $ foldr (++) "" strs
 
@@ -269,6 +278,7 @@ primitives = [
   ("for",(3,forPrimitive)),
   ("repeat",(2,repeatPrimitive)),
   ("let",(-1,letPrimitive)),
+  ("random",(2,randomPrimitive)),
   -- arith + bool primitives
   ("+",(2,addPrimitive)),
   ("-",(2,subPrimitive)),

@@ -35,9 +35,12 @@ parseLispBoolFalse = do
 parseLispBool = parseLispBoolTrue <|> try parseLispBoolFalse
 
 parseLispNum = do
+  neg <- optionMaybe (char '-')
   numstr <- many1 digit
   let num = read numstr :: Int
-  return $ LispNum num
+  case neg of 
+    Just _ -> return $ LispNum (-num)
+    Nothing -> return $ LispNum num
 
 parseLispStr = do
   str <- between (char '"') (char '"') (many1 $ noneOf "\"")
