@@ -1,4 +1,4 @@
-module HLisp () where
+module Main (main) where
 
 import System.IO
 import System.Directory (doesFileExist)
@@ -16,14 +16,15 @@ import HLispEval
 import HLispPrim
 
 main = do
+  hSetBuffering stdout NoBuffering
   putStrLn "HLisp v0.01"
   -- add primitives to global env here
   let globalEnv = foldr insertPrim M.empty primitives
-  mainLoop globalEnv
+  mainLoop ((),globalEnv)
   where insertPrim (bind,(n,f)) acc = M.insert bind (LispPrimFunc n f) acc
 
 
-mainLoop state = do
+mainLoop state@(userState, lispState) = do
   putStr ">> "
   line <- getLine
   case words line of
@@ -33,7 +34,7 @@ mainLoop state = do
     ("quit":_) -> return ()
 
     ("globals":_) -> do
-      let userGlobals = filter isUserGlobal $ M.toList state
+      let userGlobals = filter isUserGlobal $ M.toList lispState
       if length userGlobals > 0
       then do
         let userBinds = map fst userGlobals
@@ -46,12 +47,12 @@ mainLoop state = do
         mainLoop state
 
     ("clearglobals":_) -> do
-      let state' = M.fromList $ filter (not . isUserGlobal) $ M.toList state
+      let lispState' = M.fromList $ filter (not . isUserGlobal) $ M.toList lispState
       liftIO $ putStrLn "Removed all user-defined globals."
-      mainLoop state'
+      mainLoop (userState, lispState')
 
     ("info":bind:_) -> do
-      case M.lookup bind state of
+      case M.lookup bind lispState of
         Just val -> do
           liftIO $ putStrLn $ bind ++ " : " ++ (show val)
           mainLoop state

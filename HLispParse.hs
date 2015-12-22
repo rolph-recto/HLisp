@@ -62,8 +62,8 @@ preprocessInput :: String -> String
 preprocessInput input = foldr (\f acc -> f acc) input processors
   where processors = [map toLower, strip]
 
-parseLisp :: String -> Either ParseError LispExpr
+parseLisp :: String -> Either ParseError (LispExpr a)
 parseLisp input = parse parseLispExpr "" (preprocessInput input)
 
-parseLispFile :: String -> Either ParseError [LispExpr]
+parseLispFile :: String -> Either ParseError [LispExpr a]
 parseLispFile input = parse (optional betweenExprs >> sepEndBy parseLispExpr betweenExprs) "" (preprocessInput input)
