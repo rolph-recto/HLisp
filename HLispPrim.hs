@@ -239,14 +239,15 @@ consPrimitive env (hd:tl:_) = do
 
 -- access an element of a list/string
 indexPrimitive :: PrimFunc a
-indexPrimitive env (index:lst:_) = do
-  evalArgs <- mapM (eval env) [index,lst]
-  case evalArgs of
-    [LispQList qlst, LispNum n] -> do
+indexPrimitive env (lst:index:_) = do
+  lstVal <- eval env lst
+  indexVal <- eval env index
+  case (lstVal, indexVal) of
+    (LispQList qlst, LispNum n) -> do
       if n < length qlst
       then return $ qlst !! n
       else throwError "list index out of bounds"
-    [LispStr str, LispNum n] -> do
+    (LispStr str, LispNum n) -> do
       if n < length str
       then return $ LispStr [(str !! n)]
       else throwError "list index out of bounds"

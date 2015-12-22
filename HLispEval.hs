@@ -54,6 +54,11 @@ eval env expr
     retvals <- mapM (eval env) exprs
     return $ last retvals
 
+  -- eval everything in the qlist but not the qlist itself
+  | LispQList exprs <- expr = do
+    retvals <- mapM (eval env) exprs
+    return $ LispQList retvals
+
   -- symbol; return binding in environment
   | LispSym sym <- expr = do
     -- check local environment first

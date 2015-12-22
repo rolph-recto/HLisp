@@ -59,3 +59,12 @@
   ]
 ]]
 
+[set cycle [fun [n i lst] [
+  [if [< n 1]
+    ~[]
+    [if [< i [length lst]]
+      [cons [! lst i] [cycle [- n 1] [+ i 1] lst]]
+      [cons [! lst 0] [cycle [- n 1] 1 lst]]
+    ]
+  ]
+]]]
