@@ -1,6 +1,7 @@
 module HLispEval (
   eval,
-  apply, applyFunc, applyPrimFunc
+  apply, applyFunc, applyPrimFunc,
+  runLisp
 ) where
 
 import Control.Monad.Except
@@ -116,3 +117,5 @@ apply env fsym args
         applyPrimFunc env fsym args n f
 
       otherwise -> throwError $ fsym ++ " is not a function"
+
+runLisp state expr = runStateT (runExceptT $ eval M.empty expr) state

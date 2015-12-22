@@ -118,6 +118,16 @@ forPrimitive env (var:lst:body:_) = do
       return LispUnit
 
     otherwise -> throwError "for expects a symbol and a quoted list"
+
+repeatPrimitive :: PrimFunc a
+repeatPrimitive env (n':body:_) = do
+  nval <- eval env n'
+  case nval of
+    LispNum n -> do
+      forM_ [1..n] $ \_ -> (eval env body)
+      return LispUnit
+
+    otherwise -> throwError "first argument of repeat must be a num"
   
   
 -- let expression
@@ -257,6 +267,7 @@ primitives = [
   ("if",(3,ifPrimitive)),
   ("while",(2,whilePrimitive)), -- let has a variable number of arguments
   ("for",(3,forPrimitive)),
+  ("repeat",(2,repeatPrimitive)),
   ("let",(-1,letPrimitive)),
   -- arith + bool primitives
   ("+",(2,addPrimitive)),

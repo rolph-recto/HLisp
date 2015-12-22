@@ -1,6 +1,9 @@
 module HLispExpr (
   LispExec, LispEnv, PrimFunc,
-  LispExpr(..)
+  LispExpr(..),
+  LispState,
+  registerPrimitive,
+  registerPrimitives
 ) where
 
 import Control.Monad.Except
@@ -39,3 +42,12 @@ instance Show (LispExpr a) where
   show (LispFunc args body) =
     "[\\" ++ (intercalate " " args) ++ " -> " ++ show body ++ "]"
   show (LispPrimFunc _ f)     = "(primitive function)"
+
+registerPrimitive :: LispEnv a -> String -> Int -> PrimFunc a -> LispEnv a
+registerPrimitive env name n f = M.insert name (LispPrimFunc n f) env
+
+registerPrimitives :: LispEnv a -> [(String, (Int, PrimFunc a))] -> LispEnv a
+registerPrimitives env prims =
+  foldr (\(name,(n,f)) acc -> M.insert name (LispPrimFunc n f) acc) env prims
+
+

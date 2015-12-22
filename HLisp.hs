@@ -1,5 +1,3 @@
-module Main (main) where
-
 import System.IO
 import System.Directory (doesFileExist)
 
@@ -19,10 +17,8 @@ main = do
   hSetBuffering stdout NoBuffering
   putStrLn "HLisp v0.01"
   -- add primitives to global env here
-  let globalEnv = foldr insertPrim M.empty primitives
+  let globalEnv = registerPrimitives M.empty primitives
   mainLoop ((),globalEnv)
-  where insertPrim (bind,(n,f)) acc = M.insert bind (LispPrimFunc n f) acc
-
 
 mainLoop state@(userState, lispState) = do
   putStr ">> "
