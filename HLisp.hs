@@ -8,6 +8,7 @@ import Control.Monad.Except
 import Control.Monad.State
 
 import qualified Data.Map.Strict as M
+import Data.List (intercalate)
 
 import HLispExpr
 import HLispParse
@@ -21,18 +22,42 @@ main = do
   mainLoop globalEnv
   where insertPrim (bind,(n,f)) acc = M.insert bind (LispPrimFunc n f) acc
 
+
 mainLoop state = do
   putStr ">> "
   line <- getLine
   case words line of
     -- repl commands
+    [] -> mainLoop state
+
     ("quit":_) -> return ()
 
     ("globals":_) -> do
-      forM_ (M.toList state) $ \(var,val) -> do
-        liftIO $ putStrLn $ var ++ ": " ++ (show val)
-    
-      mainLoop state
+      let userGlobals = filter isUserGlobal $ M.toList state
+      if length userGlobals > 0
+      then do
+        let userBinds = map fst userGlobals
+        liftIO $ putStr "User-defined globals: "
+        liftIO $ putStrLn $ intercalate " " userBinds
+        mainLoop state
+
+      else do
+        liftIO $ putStrLn "No user-defined globals."
+        mainLoop state
+
+    ("clearglobals":_) -> do
+      let state' = M.fromList $ filter (not . isUserGlobal) $ M.toList state
+      liftIO $ putStrLn "Removed all user-defined globals."
+      mainLoop state'
+
+    ("info":bind:_) -> do
+      case M.lookup bind state of
+        Just val -> do
+          liftIO $ putStrLn $ bind ++ " : " ++ (show val)
+          mainLoop state
+        Nothing -> do
+          liftIO $ putStrLn $ "No binding found for " ++ bind ++ "."
+          mainLoop state
     
     ("load":file:_) -> do
       fileExists <- doesFileExist file
@@ -82,3 +107,8 @@ mainLoop state = do
             Right val -> do
               liftIO $ putStrLn $ show val
               mainLoop state'
+
+    where isPrim (LispPrimFunc _ _) = True
+          isPrim _                  = False
+          isUserGlobal (key,val)    = not $ isPrim val
+        

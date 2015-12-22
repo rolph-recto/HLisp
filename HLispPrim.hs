@@ -4,17 +4,22 @@ import Control.Monad.Except
 import Control.Monad.State
 
 import qualified Data.Map.Strict as M
+import Text.Read (readMaybe)
+import Data.Char (toLower)
 
 import HLispExpr
 import HLispEval
 
 -- print something out
 printPrimitive :: LispEnv -> [LispExpr] -> LispExec
-printPrimitive env (arg:_) = do
-  val <- eval env arg
-  case val of
-    LispStr s -> liftIO $ putStrLn s
-    _         -> liftIO $ putStrLn $ show val
+printPrimitive env args = do
+  vals <- mapM (eval env) args
+  forM vals $ \val ->
+    case val of
+      LispStr s -> liftIO $ putStr s
+      _         -> liftIO $ putStr (show val)
+
+  liftIO $ putStrLn ""
 
   return LispUnit
 
@@ -27,6 +32,30 @@ inputPrimitive env args = do
       return $ LispStr line
 
     otherwise -> throwError "input takes no arguments!"
+
+inputNumPrimitive :: LispEnv -> [LispExpr] -> LispExec
+inputNumPrimitive env args = do
+  case args of
+    [] -> do
+      line <- liftIO getLine
+      case readMaybe line of
+        Just n -> return $ LispNum n
+        Nothing -> throwError "expected num input!"
+
+    otherwise -> throwError "input takes no arguments!"
+
+inputBoolPrimitive :: LispEnv -> [LispExpr] -> LispExec
+inputBoolPrimitive env args = do
+  case args of
+    [] -> do
+      line <- liftIO getLine
+      case map toLower line of
+        "true"  -> return $ LispBool True
+        "false" -> return $ LispBool False
+        _       -> throwError "expected bool input!"
+
+    otherwise -> throwError "input takes no arguments!"
+  
   
 -- set a binding in the global environment
 setPrimitive :: LispEnv -> [LispExpr] -> LispExec
@@ -66,6 +95,31 @@ ifPrimitive env args = do
     LispBool False -> eval env (args !! 2)
     otherwise -> throwError "if predicate must be boolean"
 
+whilePrimitive :: LispEnv -> [LispExpr] -> LispExec
+whilePrimitive env (pred:body:_) = do
+  predval <- eval env pred
+  case predval of
+    LispBool True   -> do
+      eval env body
+      whilePrimitive env [pred,body]
+    LispBool False  -> return LispUnit
+    otherwise       -> throwError "while guard must be a boolean"
+
+forPrimitive :: LispEnv -> [LispExpr] -> LispExec
+forPrimitive env (var:lst:body:_) = do
+  lstval <- eval env lst
+  case (var,lstval) of
+    (LispSym s, LispQList iterexprs) -> do
+      forM_ iterexprs $ \iterexpr -> do
+        iterval <- eval env iterexpr
+        let env' = M.insert s iterval env
+        eval env' body
+
+      return LispUnit
+
+    otherwise -> throwError "for expects a symbol and a quoted list"
+  
+  
 -- let expression
 -- this is basically a function application that can set the
 -- name of its parameter
@@ -121,9 +175,18 @@ arithBoolPrimitive f fsym env (x:y:_) = do
 
 ltPrimitive = arithBoolPrimitive (<) "<"
 gtPrimitive = arithBoolPrimitive (>) ">"
-eqPrimitive = arithBoolPrimitive (==) "=="
 
--- list primitives
+-- eqPrimitive can compare nums, strings and bools
+eqPrimitive :: LispEnv -> [LispExpr] -> LispExec
+eqPrimitive env (x:y:_) = do
+  [xval,yval] <- mapM (eval env) [x,y]
+  case (xval,yval) of
+    (LispNum xint, LispNum yint) -> return $ LispBool (xint == yint)
+    (LispBool xbool, LispBool ybool) -> return $ LispBool (xbool == ybool)
+    (LispStr xstr, LispStr ystr) -> return $ LispBool (xstr == ystr)
+    otherwise -> throwError "== takes either two nums, two strings or two bools"
+
+-- list and string primitives
 headPrimitive :: LispEnv -> [LispExpr] -> LispExec
 headPrimitive env (lst:_) = do
   lstval <- eval env lst
@@ -143,8 +206,8 @@ nilPrimitive :: LispEnv -> [LispExpr] -> LispExec
 nilPrimitive env (lst:_) = do
   lstval <- eval env lst
   case lstval of
-    LispQList (_:_)   -> return $ LispBool False
-    LispQList []      -> return $ LispBool True
+    LispQList l       -> return $ LispBool $ length l == 0
+    LispStr s         -> return $ LispBool $ length s == 0
     otherwise         -> throwError "nil? expects list argument"
 
 consPrimitive :: LispEnv -> [LispExpr] -> LispExec
@@ -154,6 +217,21 @@ consPrimitive env (hd:tl:_) = do
   case tlval of
     LispQList xs      -> return $ LispQList (hdval:xs)
     otherwise         -> throwError "cons expects 2nd argument to be a list"
+
+-- access an element of a list/string
+indexPrimitive :: LispEnv -> [LispExpr] -> LispExec
+indexPrimitive env (index:lst:_) = do
+  evalArgs <- mapM (eval env) [index,lst]
+  case evalArgs of
+    [LispQList qlst, LispNum n] -> do
+      if n < length qlst
+      then return $ qlst !! n
+      else throwError "list index out of bounds"
+    [LispStr str, LispNum n] -> do
+      if n < length str
+      then return $ LispStr [(str !! n)]
+      else throwError "list index out of bounds"
+    otherwise -> throwError "! expects a list/string and a num as arguments"
 
 -- concatenate some strings together
 concatPrimitive :: LispEnv -> [LispExpr] -> LispExec
@@ -170,12 +248,16 @@ concatPrimitive env args = do
 primitives :: [(String, (Int,PrimFunc))]
 primitives = [
   -- control / io primitives
-  ("print",(1,printPrimitive)),
+  ("print",(-1,printPrimitive)),
   ("input",(0,inputPrimitive)),
+  ("input-num",(0,inputNumPrimitive)),
+  ("input-bool",(0,inputBoolPrimitive)),
   ("set",(2,setPrimitive)),
   ("fun",(2,funPrimitive)),
   ("if",(3,ifPrimitive)),
-  ("let",(-1,letPrimitive)), -- let has a variable number of arguments
+  ("while",(2,whilePrimitive)), -- let has a variable number of arguments
+  ("for",(3,forPrimitive)),
+  ("let",(-1,letPrimitive)),
   -- arith + bool primitives
   ("+",(2,addPrimitive)),
   ("-",(2,subPrimitive)),
@@ -189,6 +271,7 @@ primitives = [
   ("tail",(1,tailPrimitive)),
   ("nil?",(1,nilPrimitive)),
   ("cons",(2,consPrimitive)),
+  ("!",(2,indexPrimitive)),
   -- string primitives
   ("concat",(-1,concatPrimitive))]
 

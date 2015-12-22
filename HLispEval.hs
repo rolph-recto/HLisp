@@ -6,9 +6,40 @@ module HLispEval (
 import Control.Monad.Except
 import Control.Monad.State
 
+import Debug.Trace
+
 import qualified Data.Map.Strict as M
 
 import HLispExpr
+
+-- replace symbols in an expr
+subSymbol :: String -> String -> LispExpr -> LispExpr
+subSymbol old new expr
+  | LispList exprs <- expr = LispList (map (subSymbol old new) exprs)
+  | LispQList exprs <- expr = LispQList (map (subSymbol old new) exprs)
+  | LispSym s <- expr = if old == s then LispSym new else LispSym s
+  | LispFunc params body <- expr =
+    if old `elem` params then expr else LispFunc params (subSymbol old new body)
+  | otherwise = expr
+
+-- append a number to symbol to create a new one
+renameParam :: LispEnv -> Int -> String -> String
+renameParam env i param =
+  -- trace (show param ++ show i) $
+  if newParam `M.member` env then renameParam env (i+1) param else newParam
+  where newParam = param ++ (show i)
+
+-- rename bound variables in bound to prevent
+-- substitution conflicts
+-- returns new params (subbed or not) and expr with subbed symbols
+alphaRename :: LispEnv -> [String] -> LispExpr -> ([String], LispExpr)
+alphaRename env params expr = (params', expr')
+  where paramsToRename = map (\p -> (p, p `M.member` env)) params
+        shouldRename (p,rename) = if rename then renameParam env 0 p else p
+        params' = map shouldRename paramsToRename
+        subbedParams = filter (\((_,rename),_) -> rename) $ zip paramsToRename params'
+        paramSub = map (\((old,_),new) -> (old,new)) subbedParams
+        expr' = foldr (\sub acc -> uncurry subSymbol sub acc) expr paramSub
 
 eval :: LispEnv -> LispExpr -> LispExec
 eval env expr
@@ -45,8 +76,9 @@ applyFunc env fsym args params body = do
   then do
     -- add args to environment
     evalArgs <- mapM (eval env) args
-    let env' = foldr (\(key,val) acc -> M.insert key val acc) env (zip params evalArgs)
-    eval env' body
+    let (params',body') = alphaRename env params body
+    let env' = foldr (\(key,val) acc -> M.insert key val acc) env (zip params' evalArgs)
+    eval env' body'
   else do
     throwError $ "function " ++ fsym ++ " expects " ++ show numParams ++ " arguments, got " ++ show numArgs
 
@@ -58,6 +90,9 @@ applyPrimFunc env fsym args n f = do
   then do
     -- don't evaluate arguments to primitive functions!
     -- evalArgs <- mapM (eval env) args
+    -- we don't need to alpha rename parameters either, since
+    -- primitive functions use only the position of arguments
+    -- to distinguish them
     f env args
   else do
     throwError $ "function " ++ fsym ++ " expects " ++ show n ++ " arguments, got " ++ show numArgs

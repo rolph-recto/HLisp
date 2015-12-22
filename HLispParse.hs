@@ -19,7 +19,9 @@ parseLispQList = do
   return $ LispQList exprs
 
 parseLispList = do
-  exprs <- between (optional spaces >> char '[' >> optional spaces) (optional spaces >> char ']' >> optional spaces) (sepBy parseLispExpr spaces)
+  exprs <- between (optional spaces >> char '[' >> optional spaces)
+            (optional spaces >> char ']' >> optional spaces)
+            (sepBy parseLispExpr spaces)
   return $ LispList exprs
 
 parseLispBoolTrue = do
@@ -42,8 +44,18 @@ parseLispStr = do
   return $ LispStr str
 
 parseLispSym = do
-  sym <- many1 $ choice [letter, oneOf "/!@#$%^&*-+_=<>|?"]
+  let specialChars = "/!@#$%^&*-+_=<>|?"
+  sym <- many1 $ choice [letter, digit, oneOf "/!@#$%^&*-+_=<>|?"]
   return $ LispSym sym
+
+comment = char ';' >> commentBody
+commentBody =
+  (noneOf "\r\n" >> commentBody)
+  <|> (newline >> return "")
+  <|> (eof >> return "")
+
+betweenExprs = do
+  skipMany (many1 space <|> comment)
 
 -- preprocess text input before parsing
 preprocessInput :: String -> String
@@ -54,4 +66,4 @@ parseLisp :: String -> Either ParseError LispExpr
 parseLisp input = parse parseLispExpr "" (preprocessInput input)
 
 parseLispFile :: String -> Either ParseError [LispExpr]
-parseLispFile input = parse (sepBy parseLispExpr spaces) "" (preprocessInput input)
+parseLispFile input = parse (optional betweenExprs >> sepEndBy parseLispExpr betweenExprs) "" (preprocessInput input)

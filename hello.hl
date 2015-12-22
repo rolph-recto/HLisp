@@ -1,0 +1,21 @@
+; hello.hl
+; some simple scripts
+
+[set main [fun [] [
+  [set x 0]
+  [while [<= x 2] [
+    [print "what is your name?"]
+    [set name [input]]
+    [print [concat "Hello " name ", nice to meet you!"]]
+    [set x [+ x 1]]
+  ]]
+  [print "Sorry, I'm forgetful. What is your name again?"]
+]]]
+
+[set test1 [fun [] [
+  [for x [range 0 10]
+    [print "Bob has " x " apples!"]
+  ]
+]]]
+
+; this is a test
