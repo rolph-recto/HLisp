@@ -1,6 +1,8 @@
 module HLispPrim (primitives) where
 
+import System.IO
 import System.Random
+import System.Directory (doesFileExist)
 
 import Control.Monad.Except
 import Control.Monad.State
@@ -11,6 +13,33 @@ import Data.Char (toLower)
 
 import HLispExpr
 import HLispEval
+import HLispParse
+
+-- load a file
+loadPrimitive :: PrimFunc a
+loadPrimitive env (file':_) = do
+  fval <- eval env file'
+  case fval of
+    LispStr file -> do
+      fileExists <- liftIO $ doesFileExist file
+      if fileExists
+      then do
+        h <- liftIO $ openFile file ReadMode
+        filestr <- liftIO $ hGetContents h
+        case parseLispFile filestr of
+          Left err -> do
+            liftIO $ hClose h
+            throwError (show err)
+        
+          Right exprs -> do
+            liftIO $ hClose h
+            let exprList = LispList exprs
+            eval env exprList
+
+        else do
+          throwError "load: file doesn't exist!"
+
+    otherwise -> throwError "load: expected string argument"
 
 -- print something out
 printPrimitive :: PrimFunc a
@@ -268,6 +297,7 @@ concatPrimitive env args = do
 primitives :: [(String, (Int, PrimFunc a))]
 primitives = [
   -- control / io primitives
+  ("load",(1,loadPrimitive)),
   ("print",(-1,printPrimitive)),
   ("input",(0,inputPrimitive)),
   ("input-num",(0,inputNumPrimitive)),
