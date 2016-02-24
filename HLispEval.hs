@@ -20,8 +20,8 @@ subSymbol old new expr
   | LispList exprs <- expr = LispList (map (subSymbol old new) exprs)
   | LispQList exprs <- expr = LispQList (map (subSymbol old new) exprs)
   | LispSym s <- expr = if old == s then LispSym new else LispSym s
-  | LispFunc params body <- expr =
-    if old `elem` params then expr else LispFunc params (subSymbol old new body)
+  | LispFunc env params body <- expr =
+    if old `elem` params then expr else LispFunc env params (subSymbol old new body)
   | otherwise = expr
 
 -- append a number to symbol to create a new one
@@ -107,21 +107,27 @@ applyPrimFunc env fsym args n f = do
 
 apply :: LispEnv a -> String -> [LispExpr a] -> LispExec a
 apply env fsym args
-  | Just (LispFunc params body) <- M.lookup fsym env = do
-    applyFunc env fsym args params body
+  | Just (LispFunc closure_env params body) <- M.lookup fsym env = do
+    -- restore closure env 
+    let env' = restoreClosure closure_env env
+    applyFunc env' fsym args params body
   | Just (LispPrimFunc n f) <- M.lookup fsym env = do
     applyPrimFunc env fsym args n f
   | otherwise = do
     (_,globalEnv) <- lift get
     case M.lookup fsym globalEnv of
       -- lisp function
-      Just (LispFunc params body) -> do
-        applyFunc env fsym args params body
+      Just (LispFunc closure_env params body) -> do
+	let env' = restoreClosure closure_env env
+        applyFunc env' fsym args params body
 
       -- primitive function defined in Haskell
       Just (LispPrimFunc n f) -> do
         applyPrimFunc env fsym args n f
 
       otherwise -> left $ fsym ++ " is not a function"
+
+  where restoreClosure closure_env env =
+	  foldr (uncurry M.insert) env (M.toList closure_env)
 
 runLisp state expr = runStateT (runEitherT $ eval M.empty expr) state

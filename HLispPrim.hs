@@ -95,7 +95,8 @@ funPrimitive env args = do
   case args of
     [LispList params, body@(LispList _)] -> do
       if all isSym params
-      then return $ LispFunc (map symStr params) body
+      -- remember current env for closures
+      then return $ LispFunc env (map symStr params) body
       else left "fun: params must be symbols"
 
     _ -> left "fun: first and second arguments must be lists"

@@ -29,18 +29,18 @@ data LispExpr a =
   | LispNum Int
   | LispStr String
   | LispUnit -- unit value
-  | LispFunc [String] (LispExpr a) -- function: args, body
+  | LispFunc (LispEnv a) [String] (LispExpr a) -- function: closure env, args, body
   | LispPrimFunc Int (PrimFunc a) -- primitive function: nargs, function object
 
 instance Show (LispExpr a) where
-  show (LispList l)         = "[" ++ (intercalate " " (map show l)) ++ "]"
-  show (LispQList l)        = "~[" ++ (intercalate " " (map show l)) ++ "]"
-  show (LispSym s)          = s
-  show (LispBool b)         = show b
-  show (LispNum n)          = show n
-  show (LispStr s)          = "\"" ++ s ++ "\""
-  show LispUnit             = "()"
-  show (LispFunc args body) =
+  show (LispList l)	      = "[" ++ (intercalate " " (map show l)) ++ "]"
+  show (LispQList l)	      = "~[" ++ (intercalate " " (map show l)) ++ "]"
+  show (LispSym s)	      = s
+  show (LispBool b)	      = show b
+  show (LispNum n)	      = show n
+  show (LispStr s)	      = "\"" ++ s ++ "\""
+  show LispUnit		      = "()"
+  show (LispFunc _ args body) =
     "[\\" ++ (intercalate " " args) ++ " -> " ++ show body ++ "]"
   show (LispPrimFunc _ f)     = "(primitive function)"
 
