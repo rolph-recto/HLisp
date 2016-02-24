@@ -4,7 +4,8 @@ module HLispEval (
   runLisp
 ) where
 
-import Control.Monad.Except
+-- import Control.Monad.Except
+import Control.Monad.Trans.Either
 import Control.Monad.State
 
 import Debug.Trace
@@ -69,7 +70,7 @@ eval env expr
         (_,globalEnv) <- lift get
         case M.lookup sym globalEnv of
           Just val -> return val
-          Nothing -> throwError $ "no binding found for " ++ sym
+          Nothing -> left $ "no binding found for " ++ sym
 
   -- nothing to do for qlists, bools, nums, strings, etc.
   | otherwise = return expr
@@ -86,7 +87,7 @@ applyFunc env fsym args params body = do
     let env' = foldr (\(key,val) acc -> M.insert key val acc) env (zip params' evalArgs)
     eval env' body'
   else do
-    throwError $ "function " ++ fsym ++ " expects " ++ show numParams ++ " arguments, got " ++ show numArgs
+    left $ "function " ++ fsym ++ " expects " ++ show numParams ++ " arguments, got " ++ show numArgs
 
 
 applyPrimFunc :: LispEnv a -> String -> [LispExpr a] -> Int -> PrimFunc a -> LispExec a
@@ -101,7 +102,7 @@ applyPrimFunc env fsym args n f = do
     -- to distinguish them
     f env args
   else do
-    throwError $ "function " ++ fsym ++ " expects " ++ show n ++ " arguments, got " ++ show numArgs
+    left $ "function " ++ fsym ++ " expects " ++ show n ++ " arguments, got " ++ show numArgs
 
 
 apply :: LispEnv a -> String -> [LispExpr a] -> LispExec a
@@ -121,6 +122,6 @@ apply env fsym args
       Just (LispPrimFunc n f) -> do
         applyPrimFunc env fsym args n f
 
-      otherwise -> throwError $ fsym ++ " is not a function"
+      otherwise -> left $ fsym ++ " is not a function"
 
-runLisp state expr = runStateT (runExceptT $ eval M.empty expr) state
+runLisp state expr = runStateT (runEitherT $ eval M.empty expr) state

@@ -2,7 +2,8 @@ import System.IO
 import System.Directory (doesFileExist)
 
 import Control.Monad
-import Control.Monad.Except
+-- import Control.Monad.Except
+import Control.Monad.Trans.Either
 import Control.Monad.State
 
 import qualified Data.Map.Strict as M
@@ -69,7 +70,7 @@ mainLoop state@(userState, lispState) = do
           
             Right exprs -> do
               let exprList = LispList exprs
-              (result, state') <- runStateT (runExceptT $ eval M.empty exprList) state
+              (result, state') <- runStateT (runEitherT $ eval M.empty exprList) state
               case result of
                 Left err -> do
                   liftIO $ putStrLn err
@@ -91,7 +92,7 @@ mainLoop state@(userState, lispState) = do
           mainLoop state
       
         Right expr -> do
-          (result, state') <- runStateT (runExceptT $ eval M.empty expr) state
+          (result, state') <- runStateT (runEitherT $ eval M.empty expr) state
           case result of
             Left err -> do
               liftIO $ putStrLn err

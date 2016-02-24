@@ -6,7 +6,8 @@ module HLispExpr (
   registerPrimitives
 ) where
 
-import Control.Monad.Except
+-- import Control.Monad.Except
+import Control.Monad.Trans.Either
 import Control.Monad.State
 
 import Data.List (intercalate)
@@ -16,7 +17,7 @@ import qualified Data.Map.Strict as M
 -- the user-defined state is useful when defining special
 -- primitive functions
 type LispState a  = (a,LispEnv a)
-type LispExec a   = ExceptT String (StateT (LispState a) IO) (LispExpr a)
+type LispExec a   = EitherT String (StateT (LispState a) IO) (LispExpr a)
 type LispEnv  a   = M.Map String (LispExpr a)
 type PrimFunc a   = LispEnv a -> [LispExpr a] -> LispExec a
 
