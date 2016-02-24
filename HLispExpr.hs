@@ -3,7 +3,8 @@ module HLispExpr (
   LispExpr(..),
   LispState,
   registerPrimitive,
-  registerPrimitives
+  registerPrimitives,
+  getUserState, getLispState, putUserState, putLispState
 ) where
 
 -- import Control.Monad.Except
@@ -16,10 +17,29 @@ import qualified Data.Map.Strict as M
 -- LispState contains user-defined state and a global binding
 -- the user-defined state is useful when defining special
 -- primitive functions
-type LispState a  = (a,LispEnv a)
-type LispExec a   = EitherT String (StateT (LispState a) IO) (LispExpr a)
-type LispEnv  a   = M.Map String (LispExpr a)
-type PrimFunc a   = LispEnv a -> [LispExpr a] -> LispExec a
+type LispState a    = (a,LispEnv a)
+-- action on the monad stack
+type LispAction a b = EitherT String (StateT (LispState a) IO) b
+-- an execution action (primitive function, etc.)
+type LispExec a	    = LispAction a (LispExpr a)
+type LispEnv  a	    = M.Map String (LispExpr a)
+type PrimFunc a	    = LispEnv a -> [LispExpr a] -> LispExec a
+
+getUserState :: LispAction a a
+getUserState = liftM fst get 
+
+getLispState :: LispAction a (LispEnv a)
+getLispState = liftM snd get 
+
+putUserState :: a -> LispAction a ()
+putUserState ustate = do
+  (_,lstate) <- get
+  put (ustate,lstate)
+
+putLispState :: LispEnv a -> LispAction a ()
+putLispState lstate = do
+  (ustate,_) <- get
+  put (ustate,lstate)
 
 data LispExpr a =
     LispList [LispExpr a]

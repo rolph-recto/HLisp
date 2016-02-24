@@ -130,4 +130,5 @@ apply env fsym args
   where restoreClosure closure_env env =
 	  foldr (uncurry M.insert) env (M.toList closure_env)
 
+runLisp :: LispState a -> LispExpr a -> IO (Either String (LispExpr a), LispState a)
 runLisp state expr = runStateT (runEitherT $ eval M.empty expr) state

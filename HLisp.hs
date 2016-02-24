@@ -70,7 +70,7 @@ mainLoop state@(userState, lispState) = do
           
             Right exprs -> do
               let exprList = LispList exprs
-              (result, state') <- runStateT (runEitherT $ eval M.empty exprList) state
+              (result, state') <- runLisp state exprList
               case result of
                 Left err -> do
                   liftIO $ putStrLn err
@@ -92,7 +92,7 @@ mainLoop state@(userState, lispState) = do
           mainLoop state
       
         Right expr -> do
-          (result, state') <- runStateT (runEitherT $ eval M.empty expr) state
+          (result, state') <- runLisp state expr
           case result of
             Left err -> do
               liftIO $ putStrLn err
