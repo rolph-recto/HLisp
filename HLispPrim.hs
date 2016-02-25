@@ -11,6 +11,7 @@ import Control.Monad.State
 import qualified Data.Map.Strict as M
 import Text.Read (readMaybe)
 import Data.Char (toLower)
+import Data.List (intercalate)
 
 import HLispExpr
 import HLispEval
@@ -46,12 +47,12 @@ loadPrimitive env (file':_) = do
 printPrimitive :: PrimFunc a
 printPrimitive env args = do
   vals <- mapM (eval env) args
-  forM vals $ \val ->
+  printstrs <- forM vals $ \val ->
     case val of
-      LispStr s -> liftIO $ putStr s
-      _         -> liftIO $ putStr (show val)
+      LispStr s -> return s
+      _         -> return (show val)
 
-  liftIO $ putStrLn ""
+  liftIO $ putStrLn $ intercalate " " printstrs
 
   return LispUnit
 
@@ -78,18 +79,22 @@ inputBoolPrimitive env args = do
   
   
 -- set a binding in the global environment
+-- syntax: [set a val]
+-- add binding a=val to global environment
 setPrimitive :: PrimFunc a
 setPrimitive env args = do
   case args !! 0 of
     LispSym s -> do
-      (userState, globalEnv) <- lift get
+      globalEnv <- getLispState
       val <- eval env (args !! 1)
-      lift $ put $ (userState, M.insert s val globalEnv)
+      putLispState $ M.insert s val globalEnv
       return LispUnit
 
     otherwise -> left "set: first argument must be a symbol"
 
 -- convert list to function
+-- syntax [fun [arg1 arg2 ... argn] body]
+-- creates a new function with args arg1 ... argn
 funPrimitive :: PrimFunc a
 funPrimitive env args = do
   case args of
@@ -109,6 +114,8 @@ funPrimitive env args = do
 -- it's important that this has lazy semantics because branches could
 -- have side effects so we shouldn't execute a branch until we know it's
 -- the right one!
+-- syntax: [if pred then else]
+-- if pred is true, then is evaluated; otherwise else is evaluated
 ifPrimitive :: PrimFunc a
 ifPrimitive env args = do
   predVal <- eval env (args !! 0)
@@ -117,6 +124,8 @@ ifPrimitive env args = do
     LispBool False -> eval env (args !! 2)
     otherwise -> left "if: predicate must be boolean"
 
+-- syntax: [while pred body]
+-- keep executing body over and over until pred is false
 whilePrimitive :: PrimFunc a
 whilePrimitive env (pred:body:_) = do
   predval <- eval env pred
@@ -127,6 +136,9 @@ whilePrimitive env (pred:body:_) = do
     LispBool False  -> return LispUnit
     otherwise       -> left "while: guard must be a boolean"
 
+-- syntax: [for var lst body]
+-- for every element in lst, add binding var=elem to env
+-- in which body is evaluated
 forPrimitive :: PrimFunc a
 forPrimitive env (var:lst:body:_) = do
   lstval <- eval env lst
@@ -141,6 +153,56 @@ forPrimitive env (var:lst:body:_) = do
 
     otherwise -> left "for: arguments must be symbol and quoted list"
 
+-- syntax: [case [x val] [[pred1 body1] [pred2 body2] ... [predn bodyn]]]
+-- alternative: [case var [[pred1 body1] [pred2 body2] ... [predn bodyn]]]
+-- used for case / switch statements. the predicates are evaluated one-by-one
+-- with a binding x=val in the environment. the first predicate to evaluate
+-- to true will have its concomitant body evaluated.
+--
+-- for the alternative syntax, var is assumed to be in the environment already
+-- and the predicates are evaluated with the current environment
+-- example:
+-- [case [x [+ 2 2]] [
+--   [[> x 100] [print "big number"]]
+--   [[> x 50] [print "somewhat big number"]]
+--   [[> x 10] [print "small number"]]
+--   [true [print "small number"]]
+--]]
+-- returns the value of the body evaluated; otherwise if no body is evaluated
+-- (all case preds are false) then it returns unit
+evalCase :: PrimFunc a
+evalCase env [] = return LispUnit
+evalCase env (c:cs)
+  | LispList [pred, body] <- c = do
+    predval <- eval env pred
+    case predval of
+      LispBool b -> do
+	if b then do
+	  bodyval <- eval env body
+	  return bodyval
+	else evalCase env cs
+	
+      otherwise -> left "case predicate must be boolean"
+
+  | otherwise = left "case has syntax [pred body]"
+
+casePrimitive :: PrimFunc a
+casePrimitive env (bind:casestruct:_) = do
+  case (bind,casestruct) of
+    (LispList [LispSym var,bindval], LispList cases) -> do
+      bindval' <- eval env bindval
+      let env' = M.insert var bindval' env
+      evalCase env' cases
+
+    (LispSym var, LispList cases) -> do
+      if var `M.member` env then do
+	evalCase env cases
+      else left $ "var " ++ show var ++ " is not in the environment"
+
+    _ -> left "case: syntax is [case [x val] [[pred1 body1] ... [predn bodyn]]]"
+
+-- syntax: [repeat n body]
+-- repeat evaluation of body n times
 repeatPrimitive :: PrimFunc a
 repeatPrimitive env (n':body:_) = do
   nval <- eval env n'
@@ -155,6 +217,8 @@ repeatPrimitive env (n':body:_) = do
 -- let expression
 -- this is basically a function application that can set the
 -- name of its parameter
+-- syntax: [let [x valx] [y valy] ... body]
+-- add bindings x=valx, y=valy ... to evaluation of body
 letPrimitive :: PrimFunc a
 letPrimitive env args = do
   let (body:letbinds) = reverse args 
@@ -168,6 +232,7 @@ letPrimitive env args = do
   applyFunc env "let" vals vars body
 
 -- random number generator
+-- syntax: [random lo hi]
 -- returns an int between lo and hi
 randomPrimitive :: PrimFunc a
 randomPrimitive env (lo':hi':_) = do
@@ -309,6 +374,7 @@ primitives = [
   ("if",(3,ifPrimitive)),
   ("while",(2,whilePrimitive)), -- let has a variable number of arguments
   ("for",(3,forPrimitive)),
+  ("case",(2,casePrimitive)),
   ("repeat",(2,repeatPrimitive)),
   ("let",(-1,letPrimitive)),
   ("random",(2,randomPrimitive)),

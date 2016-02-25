@@ -1,12 +1,18 @@
 ; hello.hl
 ; some simple scripts
 
+[load "../../../prelude.hl"]
 [set main [fun [] [
   [set x 0]
   [while [<= x 2] [
     [print "what is your name?"]
     [set name [input]]
-    [print [concat "Hello " name ", nice to meet you!"]]
+    [case [name name] [
+      [[== name "Bob"] 
+	[print "I HATE YOU BOB!"]]
+      [true
+	[print [concat "Hello " name ", nice to meet you!"]]]
+    ]]
     [set x [+ x 1]]
   ]]
   [print "Sorry, I'm forgetful. What is your name again?"]
