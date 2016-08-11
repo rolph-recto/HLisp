@@ -1,9 +1,9 @@
-module HLispParse (parseLisp, parseLispFile) where
+module Language.HLisp.Parse (parseLisp, parseLispFile) where
 
 import Data.Char
 import Text.ParserCombinators.Parsec
 
-import HLispExpr
+import Language.HLisp.Expr
 
 -- taken from Data.String.Utils, so that
 -- we don't enter Cabal Hell by importing MissingH
@@ -82,7 +82,8 @@ betweenExprs = do
 -- preprocess text input before parsing
 preprocessInput :: String -> String
 preprocessInput input = foldr (\f acc -> f acc) input processors
-  where processors = [map toLower, strip]
+  -- where processors = [map toLower, strip]
+  where processors = [strip]
 
 parseLisp :: String -> Either ParseError (LispExpr a)
 parseLisp input = parse parseLispExpr "" (preprocessInput input)
