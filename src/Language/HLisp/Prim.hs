@@ -366,12 +366,13 @@ concatPrimitive env args = do
 -- primitive functions and number of parameters they take
 primitives :: [(String, (Int, PrimFunc a))]
 primitives = [
-  -- control / io primitives
+  -- io primitives
   ("load",(1,loadPrimitive)),
   ("print",(-1,printPrimitive)),
   ("input",(0,inputPrimitive)),
   ("input-num",(0,inputNumPrimitive)),
   ("input-bool",(0,inputBoolPrimitive)),
+  -- control primitives
   ("set",(2,setPrimitive)),
   ("fun",(2,funPrimitive)),
   ("if",(3,ifPrimitive)),
@@ -380,21 +381,24 @@ primitives = [
   ("case",(2,casePrimitive)),
   ("repeat",(2,repeatPrimitive)),
   ("let",(-1,letPrimitive)),
-  ("random",(2,randomPrimitive)),
   -- arith + bool primitives
-  ("+",(2,addPrimitive)),
-  ("-",(2,subPrimitive)),
-  ("*",(2,mulPrimitive)),
-  ("/",(2,divPrimitive)),
-  ("<",(2,ltPrimitive)),
-  (">",(2,gtPrimitive)),
-  ("==",(2,eqPrimitive)),
+  -- we give these mangled names so we can allow
+  -- partial application with the unmangled names,
+  -- which are defined as lisp functions
+  ("__PRIM__random",(2,randomPrimitive)),
+  ("__PRIM__+",(2,addPrimitive)),
+  ("__PRIM__-",(2,subPrimitive)),
+  ("__PRIM__*",(2,mulPrimitive)),
+  ("__PRIM__/",(2,divPrimitive)),
+  ("__PRIM__<",(2,ltPrimitive)),
+  ("__PRIM__>",(2,gtPrimitive)),
+  ("__PRIM__==",(2,eqPrimitive)),
   -- list primitives
-  ("head",(1,headPrimitive)),
-  ("tail",(1,tailPrimitive)),
-  ("nil?",(1,nilPrimitive)),
-  ("cons",(2,consPrimitive)),
-  ("!",(2,indexPrimitive)),
+  ("__PRIM__head",(1,headPrimitive)),
+  ("__PRIM__tail",(1,tailPrimitive)),
+  ("__PRIM__nil?",(1,nilPrimitive)),
+  ("__PRIM__cons",(2,consPrimitive)),
+  ("__PRIM__!",(2,indexPrimitive)),
   -- string primitives
   ("concat",(-1,concatPrimitive))]
 

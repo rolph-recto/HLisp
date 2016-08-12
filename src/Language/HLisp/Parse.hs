@@ -66,7 +66,6 @@ parseLispStr = do
   return $ LispStr str
 
 parseLispSym = do
-  let specialChars = "/!@#$%^&*-+_=<>|?"
   sym <- many1 $ choice [letter, digit, oneOf "/!@#$%^&*-+_=<>|?"]
   return $ LispSym sym
 

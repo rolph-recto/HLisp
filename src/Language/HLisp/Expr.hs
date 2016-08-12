@@ -60,8 +60,10 @@ instance Show (LispExpr a) where
   show (LispNum n)        = show n
   show (LispStr s)        = "\"" ++ s ++ "\""
   show LispUnit         = "()"
-  show (LispFunc _ args body) =
-    "[fun [" ++ (intercalate " " args) ++ "] " ++ show body ++ "]"
+  show (LispFunc env args body) =
+    let sargs = intercalate " " args in
+    let senv  = intercalate ", " $ map (\(var,val)-> var ++ " -> " ++ show val) $ M.toList env in
+    "[fun [" ++ sargs ++ "] " ++ show body ++ "] where [" ++ senv ++ "]"
   show (LispPrimFunc _ f)     = "(primitive function)"
 
 registerPrimitive :: LispEnv a -> String -> Int -> PrimFunc a -> LispEnv a

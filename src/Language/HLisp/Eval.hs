@@ -71,19 +71,44 @@ eval env expr
   -- nothing to do for qlists, bools, nums, strings, etc.
   | otherwise = return expr
 
+apply :: LispEnv a -> String -> [LispExpr a] -> LispExec a
+apply env fsym args = do
+  globalEnv <- getLispState
+  apply_ env fsym args [env,globalEnv]
+  where apply_ env fsym args [] = throwError $ fsym ++ " is not a function"
+        apply_ env fsym args (henv:tlenv) = case M.lookup fsym henv of
+          Just (LispFunc closure_env params body) -> do
+            -- restore closure env 
+            let env' = restoreClosure closure_env env
+            applyFunc env' fsym args params body
+
+          Just (LispPrimFunc n f) -> do
+            applyPrimFunc env fsym args n f
+
+          otherwise -> apply_ env fsym args tlenv
+
+        restoreClosure closure_env env =
+          foldr (uncurry M.insert) env (M.toList closure_env)
+
 applyFunc :: LispEnv a -> String -> [LispExpr a] -> [String] -> LispExpr a -> LispExec a
 applyFunc env fsym args params body = do
   let numArgs = length args
   let numParams = length params
+  let (params',body') = alphaRename env params body
+  evalArgs <- mapM (eval env) args
+  let env' = foldr (uncurry M.insert) env (zip params' evalArgs)
   if numArgs == numParams
   then do
-    -- add args to environment
-    evalArgs <- mapM (eval env) args
-    let (params',body') = alphaRename env params body
-    let env' = foldr (\(key,val) acc -> M.insert key val acc) env (zip params' evalArgs)
+    -- full application; evaluate body
     eval env' body'
   else do
-    throwError $ "function " ++ fsym ++ " expects " ++ show numParams ++ " arguments, got " ++ show numArgs
+    -- partial application; return a function
+    if numArgs < numParams
+    then do
+      return $ LispFunc env' (drop numArgs params') body'
+      
+    else do
+      throwError $ "function " ++ fsym ++ " expects " ++ show numParams ++ " arguments, got " ++ show numArgs
 
 
 applyPrimFunc :: LispEnv a -> String -> [LispExpr a] -> Int -> PrimFunc a -> LispExec a
@@ -98,33 +123,7 @@ applyPrimFunc env fsym args n f = do
     -- to distinguish them
     f env args
   else do
-    throwError $ "function " ++ fsym ++ " expects " ++ show n ++ " arguments, got " ++ show numArgs
-
-
-apply :: LispEnv a -> String -> [LispExpr a] -> LispExec a
-apply env fsym args
-  | Just (LispFunc closure_env params body) <- M.lookup fsym env = do
-    -- restore closure env 
-    let env' = restoreClosure closure_env env
-    applyFunc env' fsym args params body
-  | Just (LispPrimFunc n f) <- M.lookup fsym env = do
-    applyPrimFunc env fsym args n f
-  | otherwise = do
-    (_,globalEnv) <- get
-    case M.lookup fsym globalEnv of
-      -- lisp function
-      Just (LispFunc closure_env params body) -> do
-        let env' = restoreClosure closure_env env
-        applyFunc env' fsym args params body
-
-      -- primitive function defined in Haskell
-      Just (LispPrimFunc n f) -> do
-        applyPrimFunc env fsym args n f
-
-      otherwise -> throwError $ fsym ++ " is not a function"
-
-  where restoreClosure closure_env env =
-          foldr (uncurry M.insert) env (M.toList closure_env)
+    throwError $ "primitive function " ++ fsym ++ " expects " ++ show n ++ " arguments, got " ++ show numArgs
 
 runLisp :: LispState a -> LispExpr a -> IO (Either String (LispExpr a), LispState a)
 runLisp state expr = runStateT (runExceptT $ eval M.empty expr) state
