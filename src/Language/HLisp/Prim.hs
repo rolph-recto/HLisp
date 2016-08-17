@@ -1,4 +1,4 @@
-module Language.HLisp.Prim (primitives) where
+module Language.HLisp.Prim (hlispPrimitives) where
 
 import System.IO
 import System.Random
@@ -75,7 +75,6 @@ inputBoolPrimitive env args = do
     "true"  -> return $ LispBool True
     "false" -> return $ LispBool False
     _       -> throwError "input: expected bool"
-  
   
 -- set a binding in the global environment
 -- syntax: [set a val]
@@ -364,8 +363,8 @@ concatPrimitive env args = do
   return $ LispStr $ foldr (++) "" strs
 
 -- primitive functions and number of parameters they take
-primitives :: [(String, (Int, PrimFunc a))]
-primitives = [
+hlispPrimitives :: [(String, (Int, PrimFunc a))]
+hlispPrimitives = [
   -- io primitives
   ("load",(1,loadPrimitive)),
   ("print",(-1,printPrimitive)),

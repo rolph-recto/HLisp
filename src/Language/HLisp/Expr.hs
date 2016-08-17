@@ -66,6 +66,20 @@ instance Show (LispExpr a) where
     "[fun [" ++ sargs ++ "] " ++ show body ++ "] where [" ++ senv ++ "]"
   show (LispPrimFunc _ f)     = "(primitive function)"
 
+-- syntactic equality
+instance Eq (LispExpr a) where
+   (LispList l1) == (LispList l2) = all (uncurry (==)) $ zip l1 l2
+   (LispQList l1) == (LispQList l2) = all (uncurry (==)) $ zip l1 l2
+   (LispSym s1) == (LispSym s2) = s1 == s2
+   (LispBool b1) == (LispBool b2) = b1 == b2
+   (LispNum n1) == (LispNum n2) = n1 == n2
+   (LispStr s1) == (LispStr s2) = s1 == s2
+   (LispUnit) == (LispUnit) = True
+   (LispFunc env1 args1 body1) == (LispFunc env2 args2 body2) =
+     env1 == env2 && args1 == args2 && body1 == body2
+   (LispPrimFunc  _ _) == (LispPrimFunc _ _) = False
+   _ == _ = False
+
 registerPrimitive :: LispEnv a -> String -> Int -> PrimFunc a -> LispEnv a
 registerPrimitive env name n f = M.insert name (LispPrimFunc n f) env
 

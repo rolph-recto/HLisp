@@ -12,7 +12,7 @@ import Language.HLisp.Expr
 import Language.HLisp.Parse
 import Language.HLisp.Eval
 import Language.HLisp.Prim
-import HLispPrelude
+import Language.HLisp.Prelude
 
 consoleColor color act = do
   setSGR [SetColor Foreground Vivid color]
@@ -29,16 +29,8 @@ main = do
   putStrLn "HLisp v0.01"
   setSGR [Reset]
   -- add primitives to global env here
-  let globalEnv = registerPrimitives M.empty primitives
-  -- load prelude
-  case parseLispFile hlispPrelude of
-    Left err -> do
-      putStrLn "Error loading prelude! Exiting..."
-
-    Right exprs -> do
-      let exprList = LispList exprs
-      (_, globalEnv') <- runLisp ((),globalEnv) exprList
-      mainLoop globalEnv'
+  let globalEnv = registerPrimitives hlispPrelude hlispPrimitives
+  mainLoop ((),globalEnv)
 
 mainLoop state@(userState, lispState) = do
   putStr ">> "

@@ -75,20 +75,33 @@ apply :: LispEnv a -> String -> [LispExpr a] -> LispExec a
 apply env fsym args = do
   globalEnv <- getLispState
   apply_ env fsym args [env,globalEnv]
-  where apply_ env fsym args [] = throwError $ fsym ++ " is not a function"
-        apply_ env fsym args (henv:tlenv) = case M.lookup fsym henv of
-          Just (LispFunc closure_env params body) -> do
-            -- restore closure env 
-            let env' = restoreClosure closure_env env
-            applyFunc env' fsym args params body
+  where apply_ env fsym args [] = throwError $ notAFunction fsym
+        apply_ env fsym args (henv:tlenv) =do
+          case M.lookup fsym henv of
+            Just (LispFunc closure_env params body) -> do
+              -- restore closure env 
+              let env' = restoreClosure closure_env env
+              applyFunc env' fsym args params body
 
-          Just (LispPrimFunc n f) -> do
-            applyPrimFunc env fsym args n f
+            Just (LispPrimFunc n f) -> do
+              applyPrimFunc env fsym args n f
 
-          otherwise -> apply_ env fsym args tlenv
+            -- an unevaluated function
+            Just expr@(LispList _) -> do
+              fexpr <- eval env expr
+              case fexpr of
+                LispFunc _ _ _ -> do
+                  apply (M.insert fsym fexpr env) fsym args
+
+                otherwise -> do
+                  throwError $ notAFunction fsym 
+
+            otherwise -> apply_ env fsym args tlenv
 
         restoreClosure closure_env env =
           foldr (uncurry M.insert) env (M.toList closure_env)
+
+        notAFunction fsym = fsym ++ " is not a function"
 
 applyFunc :: LispEnv a -> String -> [LispExpr a] -> [String] -> LispExpr a -> LispExec a
 applyFunc env fsym args params body = do
