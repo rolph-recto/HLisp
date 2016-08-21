@@ -1,0 +1,14 @@
+extra-package-dbs: []
+packages:
+- '.'
+- ../.
+extra-deps: []
+setup-info:
+  ghcjs:
+    source:
+      ghcjs-0.2.0.20160414_ghc-7.10.2:
+        url: https://s3.amazonaws.com/ghcjs/ghcjs-0.2.0.20160414_ghc-7.10.2.tar.gz
+        sha1: f0a7243e781e27ebfe601eebaf5c57422007c142
+compiler-check: match-exact
+compiler: ghcjs-0.2.0.20160414_ghc-7.10.2
+resolver: lts-6.12

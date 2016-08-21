@@ -3,3 +3,4 @@
 *.ho
 *.o
 .stack-work/
+dist/

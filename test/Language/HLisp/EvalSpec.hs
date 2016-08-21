@@ -24,6 +24,14 @@ spec = do
       let expr = parse "[map [+ 2] ~[1 2 3]]"
       expr `shouldEvalTo` LispQList [LispNum 3, LispNum 4, LispNum 5]
 
+    it "lengths properly" $ do
+      let expr = parse "[length [map [+ 2] ~[1 2 3]]]"
+      expr `shouldEvalTo` LispNum 3
+
+    it "does evaluation properly" $ do
+      let expr = parse "[eval ~[length [map [+ 2] ~[1 2 3]]]]"
+      expr `shouldEvalTo` LispNum 3
+
   where env = registerPrimitives hlispPrelude hlispPrimitives
         eval expr = fst <$> runLisp ((), env) expr
         expr `shouldEvalTo` expected = do
@@ -34,5 +42,4 @@ spec = do
         parse sexpr = case parseLisp sexpr of
           Left msg -> error (show msg)
           Right expr -> expr
-
 

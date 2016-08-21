@@ -16,6 +16,27 @@ import Language.HLisp.Expr
 import Language.HLisp.Eval
 import Language.HLisp.Parse
 
+evalPrimitive :: PrimFunc a
+evalPrimitive env (expr':_) = do
+  expr <- eval env expr'
+  case expr of
+    LispQList contents -> eval env (LispList contents)
+    otherwise -> throwError "eval: expected quoted list as argument"
+
+parsePrimitive :: PrimFunc a
+parsePrimitive env (sexpr':_) = do
+  sexpr <- eval env sexpr'
+  case sexpr of
+    LispStr str -> do
+      case parseLisp str of
+        Left err -> throwError (show err)
+        Right expr -> do
+          case expr of
+            LispList contents -> return $ LispQList contents
+            otherwise -> throwError "parse: string must be a list to be parsed"
+
+    otherwise -> throwError "parse: expected string argument"
+
 -- load a file
 loadPrimitive :: PrimFunc a
 loadPrimitive env (file':_) = do
@@ -365,6 +386,9 @@ concatPrimitive env args = do
 -- primitive functions and number of parameters they take
 hlispPrimitives :: [(String, (Int, PrimFunc a))]
 hlispPrimitives = [
+  -- 'reflection' primitives
+  ("eval",(1,evalPrimitive)),
+  ("parse",(1,parsePrimitive)),
   -- io primitives
   ("load",(1,loadPrimitive)),
   ("print",(-1,printPrimitive)),
