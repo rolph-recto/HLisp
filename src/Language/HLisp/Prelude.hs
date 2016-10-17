@@ -37,7 +37,8 @@ hlispPrelude =
               , ("length", "[fun [lst] [foldl [fun [acc x] [+ 1 acc]] 0 lst]]")
               , ("range", "[fun [lo hi] [if [== lo hi] ~[] [cons lo [range [+ lo 1] hi]]]]")
               , ("append", "[fun [x y] [if [nil? x] y [cons [head x] [append [tail x] y]]]]")
-              , ("cycle", "[fun [n i lst] [[if [< n 1] ~[] [if [< i [length lst]] [cons [! lst i] [cycle [- n 1] [+ i 1] lst]] [cons [! lst 0] [cycle [- n 1] 1 lst]]]]]]")] in
+              , ("cycle", "[fun [n i lst] [[if [< n 1] ~[] [if [< i [length lst]] [cons [! lst i] [cycle [- n 1] [+ i 1] lst]] [cons [! lst 0] [cycle [- n 1] 1 lst]]]]]]")
+              , ("do-while", "[lfun [body pred] [[eval body] [if [eval pred] [do-while body pred] [nothing]]]]")] in
   let msg = "parse error in prelude!" in
   let processMapping = fmap (either (const $ error msg) id . parseLisp) in
   let pexprs = map processMapping pstr in

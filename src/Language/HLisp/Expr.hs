@@ -50,6 +50,7 @@ data LispExpr a =
   | LispStr String
   | LispUnit -- unit value
   | LispFunc (LispEnv a) [String] (LispExpr a) -- function: closure env, args, body
+  | LispLFunc (LispEnv a) [String] (LispExpr a) -- lazy function (like fexprs)
   | LispPrimFunc Int (PrimFunc a) -- primitive function: nargs, function object
 
 instance Show (LispExpr a) where
@@ -64,6 +65,10 @@ instance Show (LispExpr a) where
     let sargs = intercalate " " args in
     let senv  = intercalate ", " $ map (\(var,val)-> var ++ " -> " ++ show val) $ M.toList env in
     "[fun [" ++ sargs ++ "] " ++ show body ++ "] where [" ++ senv ++ "]"
+  show (LispLFunc env args body) =
+    let sargs = intercalate " " args in
+    let senv  = intercalate ", " $ map (\(var,val)-> var ++ " -> " ++ show val) $ M.toList env in
+    "[lfun [" ++ sargs ++ "] " ++ show body ++ "] where [" ++ senv ++ "]"
   show (LispPrimFunc _ f)     = "(primitive function)"
 
 -- syntactic equality

@@ -37,6 +37,10 @@ parsePrimitive env (sexpr':_) = do
 
     otherwise -> throwError "parse: expected string argument"
 
+-- do nothing
+nothingPrimitive :: PrimFunc a
+nothingPrimitive _ _ = return LispUnit
+
 -- load a file
 loadPrimitive :: PrimFunc a
 loadPrimitive env (file':_) = do
@@ -73,7 +77,6 @@ printPrimitive env args = do
       _         -> return (show val)
 
   liftIO $ putStrLn $ intercalate " " printstrs
-
   return LispUnit
 
 -- get user input from stdin
@@ -114,13 +117,13 @@ setPrimitive env args = do
 -- convert list to function
 -- syntax [fun [arg1 arg2 ... argn] body]
 -- creates a new function with args arg1 ... argn
-funPrimitive :: PrimFunc a
-funPrimitive env args = do
+funPrimitive :: (LispEnv a -> [String] -> LispExpr a -> LispExpr a) -> PrimFunc a
+funPrimitive con env args = do
   case args of
     [LispList params, body@(LispList _)] -> do
       if all isSym params
       -- remember current env for closures
-      then return $ LispFunc env (map symStr params) body
+      then return $ con env (map symStr params) body
       else throwError "fun: params must be symbols"
 
     _ -> throwError "fun: first and second arguments must be lists"
@@ -309,7 +312,7 @@ arithBoolPrimitive f fsym env (x:y:_) = do
   [xval, yval] <- mapM (eval env) [x, y]
   case (xval,yval) of
     (LispNum xint, LispNum yint) -> return $ LispBool (f xint yint)
-    _                         -> throwError $ fsym ++ " takes two integers"
+    _ -> throwError $ fsym ++ " takes two integers"
 
 ltPrimitive = arithBoolPrimitive (<) "<"
 gtPrimitive = arithBoolPrimitive (>) ">"
@@ -389,6 +392,7 @@ hlispPrimitives = [
   -- 'reflection' primitives
   ("eval",(1,evalPrimitive)),
   ("parse",(1,parsePrimitive)),
+  ("nothing",(0,nothingPrimitive)),
   -- io primitives
   ("load",(1,loadPrimitive)),
   ("print",(-1,printPrimitive)),
@@ -397,7 +401,8 @@ hlispPrimitives = [
   ("input-bool",(0,inputBoolPrimitive)),
   -- control primitives
   ("set",(2,setPrimitive)),
-  ("fun",(2,funPrimitive)),
+  ("fun",(2,funPrimitive LispFunc)),
+  ("lfun",(2,funPrimitive LispLFunc)),
   ("if",(3,ifPrimitive)),
   ("while",(2,whilePrimitive)), -- let has a variable number of arguments
   ("for",(3,forPrimitive)),

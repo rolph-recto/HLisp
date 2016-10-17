@@ -51,10 +51,8 @@ eval env expr
     retvals <- mapM (eval env) exprs
     return $ last retvals
 
-  -- eval everything in the qlist but not the qlist itself
-  | LispQList exprs <- expr = do
-    retvals <- mapM (eval env) exprs
-    return $ LispQList retvals
+  -- don't evaluate anything in a qlist
+  | LispQList exprs <- expr = return expr
 
   -- symbol; return binding in environment
   | LispSym sym <- expr = do
@@ -83,6 +81,11 @@ apply env fsym args = do
               let env' = restoreClosure closure_env env
               applyFunc env' fsym args params body
 
+            Just (LispLFunc closure_env params body) -> do
+              -- restore closure env 
+              let env' = restoreClosure closure_env env
+              applyLFunc env' fsym args params body
+
             Just (LispPrimFunc n f) -> do
               applyPrimFunc env fsym args n f
 
@@ -91,6 +94,12 @@ apply env fsym args = do
               fexpr <- eval env expr
               case fexpr of
                 LispFunc _ _ _ -> do
+                  apply (M.insert fsym fexpr env) fsym args
+
+                LispLFunc _ _ _ -> do
+                  apply (M.insert fsym fexpr env) fsym args
+
+                LispPrimFunc _ _ -> do
                   apply (M.insert fsym fexpr env) fsym args
 
                 otherwise -> do
@@ -119,10 +128,19 @@ applyFunc env fsym args params body = do
     if numArgs < numParams
     then do
       return $ LispFunc env' (drop numArgs params') body'
-      
     else do
       throwError $ "function " ++ fsym ++ " expects " ++ show numParams ++ " arguments, got " ++ show numArgs
 
+-- this evaluates lazy functions (lfuncs), which are similar to fexprs
+-- the easy way to making a function lazy is to convert all of the
+-- unevaluated lists to quoted lists; that way they will not be evaluated
+-- unless it is passed as an argument to the 'eval' primitive
+applyLFunc :: LispEnv a -> String -> [LispExpr a] -> [String] -> LispExpr a -> LispExec a
+applyLFunc env fsym args params body = do
+  let largs = map makeLazyArg args
+  applyFunc env fsym largs params body
+  where makeLazyArg  (LispList l) = LispQList l
+        makeLazyArg p = p
 
 applyPrimFunc :: LispEnv a -> String -> [LispExpr a] -> Int -> PrimFunc a -> LispExec a
 applyPrimFunc env fsym args n f = do
