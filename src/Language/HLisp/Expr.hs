@@ -82,6 +82,8 @@ instance Eq (LispExpr a) where
    (LispUnit) == (LispUnit) = True
    (LispFunc env1 args1 body1) == (LispFunc env2 args2 body2) =
      env1 == env2 && args1 == args2 && body1 == body2
+   (LispLFunc env1 args1 body1) == (LispLFunc env2 args2 body2) =
+     env1 == env2 && args1 == args2 && body1 == body2
    (LispPrimFunc  _ _) == (LispPrimFunc _ _) = False
    _ == _ = False
 
