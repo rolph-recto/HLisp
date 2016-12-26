@@ -1,4 +1,6 @@
-module Language.HLisp.Prim (hlispPrimitives) where
+module Language.HLisp.Prim (hlispPrimitives) wherequit
+:q
+
 
 import System.IO
 import System.Random
@@ -6,6 +8,7 @@ import System.Directory (doesFileExist)
 
 import Control.Monad.Except
 import Control.Monad.State
+import Control.Monad.Reader
 
 import qualified Data.Map.Strict as M
 import Text.Read (readMaybe)
@@ -40,6 +43,25 @@ parsePrimitive env (sexpr':_) = do
 -- do nothing
 nothingPrimitive :: PrimFunc a
 nothingPrimitive _ _ = return LispUnit
+
+-- call by current continuation
+callccPrimitive :: PrimFunc a
+callccPrimitive env (kfunc':_) = do
+  kfunc <- eval env kfunc'
+  case kfunc of
+    LispFunc globalEnv localEnv [k] body -> do
+      -- reify the current continuation into a lisp function
+      contStack <- getLispStack
+      let cont = foldr (.) id contStack
+      let reifiedCont = LispFunc M.empty M.empty ["__CONT__"] $ cont (LispSym "__CONT__")
+      liftIO $ print reifiedCont
+      
+      -- pass the cc into the argument of callcc
+      -- smash the "control stack"
+      applyFunc globalEnv localEnv "##CONTSYM##" [reifiedCont] [k] body
+      
+    otherwise -> do
+      throwError "CallCC expects a function taking a single continuation object as an argument"
 
 -- load a file
 loadPrimitive :: PrimFunc a
@@ -117,13 +139,15 @@ setPrimitive env args = do
 -- convert list to function
 -- syntax [fun [arg1 arg2 ... argn] body]
 -- creates a new function with args arg1 ... argn
-funPrimitive :: (LispEnv a -> [String] -> LispExpr a -> LispExpr a) -> PrimFunc a
+funPrimitive :: (LispEnv a -> LispEnv a -> [String] -> LispExpr a -> LispExpr a) -> PrimFunc a
 funPrimitive con env args = do
   case args of
     [LispList params, body@(LispList _)] -> do
       if all isSym params
       -- remember current env for closures
-      then return $ con env (map symStr params) body
+      then do
+        globalEnv <- getLispState
+        return $ con globalEnv env (map symStr params) body
       else throwError "fun: params must be symbols"
 
     _ -> throwError "fun: first and second arguments must be lists"
@@ -255,7 +279,8 @@ letPrimitive env args = do
         throwError "let: binds must have form [let [var val] ... [var val] body]"
 
   let (vars, vals) = unzip binds
-  applyFunc env "let" vals vars body
+  globalEnv <- getLispState
+  applyFunc globalEnv env "let" vals vars body
 
 -- random number generator
 -- syntax: [random lo hi]
@@ -345,6 +370,7 @@ tailPrimitive env (lst:_) = do
 
 nilPrimitive :: PrimFunc a
 nilPrimitive env (lst:_) = do
+  liftIO $ print lst
   lstval <- eval env lst
   case lstval of
     LispQList l       -> return $ LispBool $ length l == 0
@@ -393,6 +419,7 @@ hlispPrimitives = [
   ("eval",(1,evalPrimitive)),
   ("parse",(1,parsePrimitive)),
   ("nothing",(0,nothingPrimitive)),
+  ("callcc",(1,callccPrimitive)),
   -- io primitives
   ("load",(1,loadPrimitive)),
   ("print",(-1,printPrimitive)),

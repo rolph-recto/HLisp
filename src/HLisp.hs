@@ -14,6 +14,7 @@ import Language.HLisp.Eval
 import Language.HLisp.Prim
 import Language.HLisp.Prelude
 
+-- test
 consoleColor color act = do
   setSGR [SetColor Foreground Vivid color]
   act
@@ -30,9 +31,9 @@ main = do
   setSGR [Reset]
   -- add primitives to global env here
   let globalEnv = registerPrimitives hlispPrelude hlispPrimitives
-  mainLoop ((),globalEnv)
+  mainLoop ((),globalEnv,[])
 
-mainLoop state@(userState, lispState) = do
+mainLoop state@(userState, lispState, lispStack) = do
   putStr ">> "
   line <- getLine
   case words line of
@@ -57,7 +58,7 @@ mainLoop state@(userState, lispState) = do
     ("clearglobals":_) -> do
       let lispState' = M.fromList $ filter (not . isUserGlobal) $ M.toList lispState
       liftIO $ consoleOkay $ putStrLn "Removed all user-defined globals."
-      mainLoop (userState, lispState')
+      mainLoop (userState, lispState', lispStack)
 
     ("info":bind:_) -> do
       case M.lookup bind lispState of

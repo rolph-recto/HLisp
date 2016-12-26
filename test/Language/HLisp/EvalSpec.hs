@@ -33,7 +33,7 @@ spec = do
       expr `shouldEvalTo` LispNum 3
 
   where env = registerPrimitives hlispPrelude hlispPrimitives
-        eval expr = fst <$> runLisp ((), env) expr
+        eval expr = fst <$> runLisp ((), env, []) expr
         expr `shouldEvalTo` expected = do
           res <- eval expr
           case res of
